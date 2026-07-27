@@ -11,9 +11,17 @@ from app.db import get_db
 from app.models import EnrollmentToken, HeartbeatEvent, Server, User, UserSession
 from app.schemas import EnrollmentRequest, EnrollmentResponse, HeartbeatRequest, LoginRequest
 from app.security import new_token, token_hash, verify_password
+from app.version import __version__
 
-app = FastAPI(title="Check Life Servers", version="0.1.0")
+app = FastAPI(title="Check Life Servers", version=__version__)
 settings = get_settings()
+
+
+@app.middleware("http")
+async def service_version_header(request: Request, call_next):
+    response = await call_next(request)
+    response.headers["X-CLS-Version"] = __version__
+    return response
 
 
 @app.get("/api/v1/health/live")
@@ -25,6 +33,15 @@ def live() -> dict[str, str]:
 def ready(db: Session = Depends(get_db)) -> dict[str, str]:
     db.execute(select(1))
     return {"status": "ready"}
+
+
+@app.get("/api/v1/system/version")
+def system_version() -> dict[str, str]:
+    return {
+        "service": "check-life-servers",
+        "version": __version__,
+        "api_version": "v1",
+    }
 
 
 def current_user(

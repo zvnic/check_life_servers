@@ -1,6 +1,10 @@
+[build-system]
+requires = ["setuptools>=75"]
+build-backend = "setuptools.build_meta"
+
 [project]
 name = "check-life-servers"
-version = "0.1.0"
+dynamic = ["version"]
 description = "Server availability monitoring API"
 requires-python = ">=3.12"
 dependencies = [
@@ -12,6 +16,9 @@ dependencies = [
   "sqlalchemy>=2.0,<3",
   "uvicorn[standard]>=0.32,<1",
 ]
+
+[tool.setuptools.dynamic]
+version = {attr = "app.version.__version__"}
 
 [project.optional-dependencies]
 dev = [

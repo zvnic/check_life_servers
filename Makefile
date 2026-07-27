@@ -7,11 +7,22 @@ ADMIN_LOGIN ?= admin
 SERVER_NAME ?=
 PLATFORM ?=
 
-.PHONY: help env build up down restart ps logs migrate admin-create admin-create-generated \
-	admin-reset-password enrollment-create test test-unit test-integration lint doctor clean
+.PHONY: help version version-set version-check env build up down restart ps logs migrate admin-create \
+	admin-create-generated admin-reset-password enrollment-create test test-unit \
+	test-integration lint doctor clean
 
 help: ## Показать команды
 	@awk 'BEGIN {FS = ":.*## "}; /^[a-zA-Z0-9_-]+:.*## / {printf "%-26s %s\n", $$1, $$2}' $(MAKEFILE_LIST)
+
+version: ## Показать единую версию сервиса
+	@tr -d '\r\n' < VERSION
+	@echo
+
+version-set: ## Установить SemVer, NEW_VERSION=0.3.0
+	@./scripts/set-version.sh "$(NEW_VERSION)"
+
+version-check: ## Сверить source, runtime и Python package
+	@./scripts/check-version.sh
 
 env: ## Создать .env из безопасного примера
 	@test -f .env || cp .env.example .env

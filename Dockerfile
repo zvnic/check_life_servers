@@ -7,7 +7,8 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 WORKDIR /app
 RUN addgroup --system cls && adduser --system --ingroup cls --home /app cls
 
-COPY pyproject.toml ./
+COPY pyproject.toml VERSION ./
+COPY app/__init__.py app/version.py ./app/
 RUN pip install --upgrade pip && pip install ".[dev]"
 
 COPY alembic.ini ./
@@ -18,4 +19,3 @@ COPY tests ./tests
 USER cls
 EXPOSE 8000
 CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
-

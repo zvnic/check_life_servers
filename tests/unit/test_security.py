@@ -1,8 +1,12 @@
+import re
+from importlib.metadata import version as package_version
+
 import pytest
 from argon2 import PasswordHasher
 
 from app.cli import random_password
 from app.security import hash_password, token_hash, validate_password, verify_password
+from app.version import __version__
 
 
 def test_password_is_argon2id_hash() -> None:
@@ -29,3 +33,8 @@ def test_generated_admin_password_always_matches_policy() -> None:
         password = random_password()
         validate_password(password)
         assert len(password) == 24
+
+
+def test_runtime_and_package_use_the_same_version_source() -> None:
+    assert re.fullmatch(r"\d+\.\d+\.\d+(?:[+-][0-9A-Za-z.-]+)?", __version__)
+    assert package_version("check-life-servers") == __version__

@@ -27,7 +27,7 @@ version-check: ## Сверить source, runtime и Python package
 env: ## Создать .env из безопасного примера
 	@test -f .env || cp .env.example .env
 	@chmod 600 .env
-	@echo ".env создан. Замените POSTGRES_PASSWORD и DATABASE_URL."
+	@echo ".env создан. Настройте пароль БД, CLS_PUBLIC_URL и WEB_PORT."
 
 build: ## Собрать Docker-образы
 	$(COMPOSE) build

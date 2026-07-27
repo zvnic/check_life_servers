@@ -225,6 +225,40 @@ document.querySelectorAll("[data-copy]").forEach((button) => {
   };
 });
 
+$("#add-device").onclick = () => {
+  $("#device-modal").classList.remove("hidden");
+  $("#device-error").textContent = "";
+};
+$("#close-device-modal").onclick = () => $("#device-modal").classList.add("hidden");
+$("#device-modal").onclick = (event) => {
+  if (event.target === $("#device-modal")) $("#device-modal").classList.add("hidden");
+};
+$("#device-form").onsubmit = async (event) => {
+  event.preventDefault();
+  const form = new FormData(event.currentTarget);
+  $("#device-error").textContent = "";
+  $("#generated-command").classList.add("hidden");
+  try {
+    const bootstrap = await api("/api/v1/enrollment-tokens", {
+      method: "POST",
+      body: JSON.stringify({
+        server_name: form.get("server_name"),
+        platform: form.get("platform"),
+      }),
+    });
+    text("#install-command", bootstrap.command);
+    text("#command-expiry", formatTime(bootstrap.expires_at));
+    $("#generated-command").classList.remove("hidden");
+    $("#bootstrap-warning").textContent = bootstrap.command.includes("localhost")
+      ? "Внимание: CLS_PUBLIC_URL указывает на localhost. Перед установкой на внешнее устройство настройте публичный HTTPS-домен."
+      : "Команда содержит одноразовый код. Не публикуйте и не пересылайте её посторонним.";
+  } catch (error) {
+    $("#device-error").textContent = error.message === "unauthorized"
+      ? "Сессия завершена — войдите снова."
+      : "Не удалось создать установочную команду.";
+  }
+};
+
 $("#login-form").onsubmit = async (event) => {
   event.preventDefault();
   const form = new FormData(event.currentTarget);

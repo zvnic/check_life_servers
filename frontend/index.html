@@ -23,7 +23,7 @@
   <main>
     <header>
       <div><p id="page-eyebrow" class="eyebrow">ЦЕНТР УПРАВЛЕНИЯ</p><h1 id="page-title">Состояние инфраструктуры</h1></div>
-      <div class="actions"><button id="refresh">↻</button><span class="user">● <b id="current-user">admin</b></span><button id="logout">Выйти</button></div>
+      <div class="actions"><button id="add-device" class="add-device">＋ Добавить устройство</button><button id="refresh">↻</button><span class="user">● <b id="current-user">admin</b></span><button id="logout">Выйти</button></div>
     </header>
 
     <section id="metrics-section" class="metrics">
@@ -100,6 +100,29 @@
     <label>Пароль<input name="password" type="password" autocomplete="current-password" required></label>
     <p id="login-error" class="error"></p><button type="submit">Войти в систему</button>
     <small class="login-version">Check Life Servers <b class="service-version">—</b></small>
+  </form>
+</div>
+<div id="device-modal" class="modal hidden">
+  <form id="device-form" class="modal-card">
+    <div class="modal-head"><div><p class="eyebrow">BOOTSTRAP</p><h2>Добавить устройство</h2></div><button id="close-device-modal" type="button">×</button></div>
+    <label>Название объекта<input name="server_name" placeholder="Например: server-office-01" required maxlength="255"></label>
+    <label>Платформа
+      <select name="platform">
+        <option value="auto">Определить автоматически (Ubuntu/OpenWrt)</option>
+        <option value="ubuntu">Ubuntu/Debian</option>
+        <option value="openwrt">OpenWrt</option>
+        <option value="routeros">MikroTik RouterOS 7</option>
+      </select>
+    </label>
+    <p id="bootstrap-warning" class="bootstrap-warning"></p>
+    <p id="device-error" class="error"></p>
+    <button type="submit" class="primary-action">Сгенерировать команду</button>
+    <div id="generated-command" class="generated hidden">
+      <small>Команда действует до <b id="command-expiry">—</b></small>
+      <code id="install-command"></code>
+      <button type="button" class="secondary-action" data-copy="#install-command">Копировать команду</button>
+      <p>Запустите команду на устройстве. После регистрации оно появится в разделе «Объекты».</p>
+    </div>
   </form>
 </div>
 <script src="/app.js"></script>

@@ -7,6 +7,7 @@ from pydantic import BaseModel, Field
 class EnrollmentRequest(BaseModel):
     token: str = Field(min_length=32)
     installation_id: str = Field(min_length=8, max_length=255)
+    platform: str | None = Field(default=None, pattern="^(ubuntu|openwrt|routeros)$")
     metadata: dict[str, Any] = Field(default_factory=dict)
     capabilities: list[str] = Field(default_factory=list)
 
@@ -15,6 +16,11 @@ class EnrollmentResponse(BaseModel):
     server_id: str
     credential: str
     next_heartbeat_seconds: int = 60
+
+
+class EnrollmentTokenCreate(BaseModel):
+    server_name: str = Field(min_length=1, max_length=255)
+    platform: str = Field(default="auto", pattern="^(auto|ubuntu|openwrt|routeros)$")
 
 
 class LoginRequest(BaseModel):

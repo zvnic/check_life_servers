@@ -1,15 +1,33 @@
 from datetime import UTC, datetime, timedelta
 from uuid import UUID
 
-from fastapi import Cookie, Depends, FastAPI, Header, HTTPException, Request, Response, status
+from fastapi import (
+    Cookie,
+    Depends,
+    FastAPI,
+    Header,
+    HTTPException,
+    Query,
+    Request,
+    Response,
+    status,
+)
+from fastapi.responses import PlainTextResponse
 from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.config import get_settings
 from app.db import get_db
+from app.installers import linux_installer, routeros_installer
 from app.models import EnrollmentToken, HeartbeatEvent, Server, User, UserSession
-from app.schemas import EnrollmentRequest, EnrollmentResponse, HeartbeatRequest, LoginRequest
+from app.schemas import (
+    EnrollmentRequest,
+    EnrollmentResponse,
+    EnrollmentTokenCreate,
+    HeartbeatRequest,
+    LoginRequest,
+)
 from app.security import new_token, token_hash, verify_password
 from app.version import __version__
 
@@ -108,6 +126,69 @@ def logout(
 @app.get("/api/v1/auth/me")
 def me(user: User = Depends(current_user)) -> dict:
     return {"login": user.login, "role": user.role}
+
+
+@app.post("/api/v1/enrollment-tokens")
+def create_enrollment_token(
+    payload: EnrollmentTokenCreate,
+    user: User = Depends(current_user),
+    db: Session = Depends(get_db),
+) -> dict:
+    if user.role != "admin":
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Admin role required")
+    raw_token = new_token()
+    expires_at = datetime.now(UTC) + timedelta(minutes=settings.enrollment_ttl_minutes)
+    db.add(
+        EnrollmentToken(
+            token_hash=token_hash(raw_token),
+            server_name=payload.server_name,
+            platform=payload.platform,
+            expires_at=expires_at,
+        )
+    )
+    db.commit()
+    base_url = settings.cls_public_url.rstrip("/")
+    if payload.platform == "routeros":
+        command = (
+            f'/tool fetch url="{base_url}/install/{raw_token}?platform=routeros" '
+            "dst-path=cls-install.rsc check-certificate=yes; "
+            "/import file-name=cls-install.rsc"
+        )
+    else:
+        command = f"curl -fsSL {base_url}/install/{raw_token} | sudo sh"
+    return {
+        "command": command,
+        "expires_at": expires_at,
+        "platform": payload.platform,
+    }
+
+
+@app.get("/install/{raw_token}", response_class=PlainTextResponse)
+def download_installer(
+    raw_token: str,
+    platform: str | None = Query(default=None, pattern="^(auto|ubuntu|openwrt|routeros)$"),
+    db: Session = Depends(get_db),
+) -> PlainTextResponse:
+    enrollment = db.scalar(
+        select(EnrollmentToken).where(EnrollmentToken.token_hash == token_hash(raw_token))
+    )
+    now = datetime.now(UTC)
+    if not enrollment or enrollment.used_at or enrollment.expires_at <= now:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Installer expired")
+    selected_platform = platform or enrollment.platform
+    content = (
+        routeros_installer(settings.cls_public_url, raw_token)
+        if selected_platform == "routeros"
+        else linux_installer(settings.cls_public_url, raw_token)
+    )
+    filename = "cls-install.rsc" if selected_platform == "routeros" else "cls-install.sh"
+    return PlainTextResponse(
+        content,
+        headers={
+            "Content-Disposition": f'attachment; filename="{filename}"',
+            "Cache-Control": "no-store",
+        },
+    )
 
 
 def server_status(last_seen_at: datetime | None, now: datetime) -> str:
@@ -217,7 +298,7 @@ def enroll(payload: EnrollmentRequest, db: Session = Depends(get_db)) -> Enrollm
     credential = new_token(48)
     server = Server(
         name=enrollment.server_name,
-        platform=enrollment.platform,
+        platform=payload.platform or enrollment.platform,
         installation_id=payload.installation_id,
         credential_hash=token_hash(credential),
         metadata_json=payload.metadata,

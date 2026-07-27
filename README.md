@@ -12,7 +12,9 @@ make up
 make admin-create
 ```
 
-API: <http://127.0.0.1:8000/docs>
+Web dashboard: <http://127.0.0.1:8080>
+
+OpenAPI через reverse proxy: <http://127.0.0.1:8080/docs>
 
 Все backend-команды, миграции и тесты выполняются в Docker. Полное техническое
 задание находится в `tz_server_availability_monitoring.md`.

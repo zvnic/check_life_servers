@@ -21,10 +21,10 @@ env: ## Создать .env из безопасного примера
 build: ## Собрать Docker-образы
 	$(COMPOSE) build
 
-up: ## Запустить БД, миграции и API
+up: ## Запустить БД, миграции, API и web dashboard
 	$(COMPOSE) up -d db
 	$(COMPOSE) run --rm api alembic upgrade head
-	$(COMPOSE) up -d api
+	$(COMPOSE) up -d api frontend
 
 down: ## Остановить стек без удаления данных
 	$(COMPOSE) down

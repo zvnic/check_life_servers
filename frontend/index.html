@@ -1,0 +1,75 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="color-scheme" content="dark">
+  <title>Check Life Servers</title>
+  <link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+<div class="shell">
+  <aside>
+    <a class="brand" href="/"><span class="logo"><i></i><i></i><i></i></span><span><b>CHECK LIFE</b><small>SERVER MONITOR</small></span></a>
+    <nav>
+      <button class="active">⌁ <span>Обзор</span></button>
+      <button>▱ <span>Объекты</span></button>
+      <button>⚠ <span>Инциденты</span></button>
+      <button>⌇ <span>Аналитика</span></button>
+      <button>⚙ <span>Настройки</span></button>
+    </nav>
+    <div class="monitor"><i></i><span><b>Монитор работает</b><small id="monitor-time">проверка…</small></span></div>
+  </aside>
+  <main>
+    <header>
+      <div><p class="eyebrow">ЦЕНТР УПРАВЛЕНИЯ</p><h1>Состояние инфраструктуры</h1></div>
+      <div class="actions"><button id="refresh">↻</button><span class="user">● <b id="current-user">admin</b></span><button id="logout">Выйти</button></div>
+    </header>
+
+    <section class="metrics">
+      <article class="metric hero"><p>ОБЩАЯ ДОСТУПНОСТЬ</p><div><strong id="uptime">—</strong><em>%</em></div><small>Текущий срез зарегистрированных объектов</small></article>
+      <article class="metric"><p>ВСЕГО ОБЪЕКТОВ</p><strong id="total">—</strong><small><i class="dot green"></i><b id="online">—</b> в сети</small></article>
+      <article class="metric"><p>НЕДОСТУПНЫ</p><strong id="offline">—</strong><small><i class="dot red"></i>требуют внимания</small></article>
+      <article class="metric"><p>БЕЗ ДАННЫХ</p><strong id="unknown">—</strong><small><i class="dot gray"></i>ожидают heartbeat</small></article>
+    </section>
+
+    <section class="grid">
+      <article class="panel chart-panel">
+        <div class="title"><div><p class="eyebrow">СИГНАЛЫ</p><h2>Задержка heartbeat</h2></div><span>последние 200</span></div>
+        <div id="chart" class="chart empty">
+          <svg viewBox="0 0 900 240" preserveAspectRatio="none">
+            <defs><linearGradient id="fill" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#69f5bd" stop-opacity=".26"/><stop offset="1" stop-color="#69f5bd" stop-opacity="0"/></linearGradient></defs>
+            <g class="chart-grid"><line x1="0" y1="50" x2="900" y2="50"/><line x1="0" y1="110" x2="900" y2="110"/><line x1="0" y1="170" x2="900" y2="170"/><line x1="0" y1="225" x2="900" y2="225"/></g>
+            <path class="area" d=""/><path class="line" d=""/>
+          </svg>
+          <p>Выберите объект в таблице</p>
+        </div>
+      </article>
+      <article class="panel distribution">
+        <div class="title"><div><p class="eyebrow">СВОДКА</p><h2>Распределение</h2></div></div>
+        <div id="donut" class="donut"><span><b id="donut-total">0</b><small>объектов</small></span></div>
+        <div class="legend"><span><i class="dot green"></i>Online <b id="leg-online">0</b></span><span><i class="dot red"></i>Offline <b id="leg-offline">0</b></span><span><i class="dot gray"></i>Unknown <b id="leg-unknown">0</b></span></div>
+      </article>
+    </section>
+
+    <section class="panel servers">
+      <div class="title"><div><p class="eyebrow">ИНФРАСТРУКТУРА</p><h2>Контролируемые объекты</h2></div><label>⌕ <input id="search" placeholder="Найти объект"></label></div>
+      <div class="scroll"><table><thead><tr><th>ОБЪЕКТ</th><th>ПЛАТФОРМА</th><th>СТАТУС</th><th>ПОСЛЕДНИЙ HEARTBEAT</th><th>СИГНАЛЫ</th></tr></thead><tbody id="server-table"></tbody></table></div>
+      <div id="empty" class="empty-list"><strong>Объекты ещё не зарегистрированы</strong><small>Создайте enrollment token и установите агент.</small><code>make enrollment-create SERVER_NAME=edge-01 PLATFORM=ubuntu</code></div>
+    </section>
+  </main>
+</div>
+
+<div id="login-screen" class="login hidden">
+  <form id="login-form">
+    <div class="brand"><span class="logo"><i></i><i></i><i></i></span><span><b>CHECK LIFE</b><small>SERVER MONITOR</small></span></div>
+    <p class="eyebrow">ЗАЩИЩЁННЫЙ ДОСТУП</p><h2>Вход администратора</h2>
+    <label>Логин<input name="login" value="admin" autocomplete="username" required></label>
+    <label>Пароль<input name="password" type="password" autocomplete="current-password" required></label>
+    <p id="login-error" class="error"></p><button type="submit">Войти в систему</button>
+  </form>
+</div>
+<script src="/app.js"></script>
+</body>
+</html>
+

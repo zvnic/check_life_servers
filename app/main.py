@@ -2,7 +2,7 @@ from datetime import UTC, datetime, timedelta
 from uuid import UUID
 
 from fastapi import Cookie, Depends, FastAPI, Header, HTTPException, Request, Response, status
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -91,6 +91,92 @@ def logout(
 @app.get("/api/v1/auth/me")
 def me(user: User = Depends(current_user)) -> dict:
     return {"login": user.login, "role": user.role}
+
+
+def server_status(last_seen_at: datetime | None, now: datetime) -> str:
+    if last_seen_at is None:
+        return "unknown"
+    return "online" if last_seen_at >= now - timedelta(seconds=180) else "offline"
+
+
+@app.get("/api/v1/dashboard/summary")
+def dashboard_summary(
+    _: User = Depends(current_user),
+    db: Session = Depends(get_db),
+) -> dict:
+    now = datetime.now(UTC)
+    registered_servers = list(db.scalars(select(Server)))
+    statuses = [server_status(server.last_seen_at, now) for server in registered_servers]
+    online = statuses.count("online")
+    offline = statuses.count("offline")
+    unknown = statuses.count("unknown")
+    total = len(registered_servers)
+    return {
+        "total": total,
+        "online": online,
+        "offline": offline,
+        "unknown": unknown,
+        "uptime_percent": round(online / total * 100, 2) if total else None,
+        "active_incidents": offline,
+        "generated_at": now,
+    }
+
+
+@app.get("/api/v1/servers")
+def list_servers(
+    _: User = Depends(current_user),
+    db: Session = Depends(get_db),
+) -> list[dict]:
+    now = datetime.now(UTC)
+    rows = db.execute(
+        select(Server, func.count(HeartbeatEvent.id))
+        .outerjoin(HeartbeatEvent, HeartbeatEvent.server_id == Server.id)
+        .group_by(Server.id)
+        .order_by(Server.name)
+    )
+    return [
+        {
+            "id": str(server.id),
+            "name": server.name,
+            "platform": server.platform,
+            "status": server_status(server.last_seen_at, now),
+            "last_seen_at": server.last_seen_at,
+            "heartbeat_count": heartbeat_count,
+            "metadata": server.metadata_json,
+            "capabilities": server.capabilities,
+        }
+        for server, heartbeat_count in rows
+    ]
+
+
+@app.get("/api/v1/servers/{server_id}/heartbeats")
+def server_heartbeats(
+    server_id: UUID,
+    limit: int = 200,
+    _: User = Depends(current_user),
+    db: Session = Depends(get_db),
+) -> list[dict]:
+    if not db.get(Server, server_id):
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Server not found")
+    events = db.scalars(
+        select(HeartbeatEvent)
+        .where(HeartbeatEvent.server_id == server_id)
+        .order_by(HeartbeatEvent.received_at.desc())
+        .limit(min(max(limit, 1), 1000))
+    )
+    return [
+        {
+            "event_id": event.event_id,
+            "sequence": event.sequence,
+            "measured_at": event.measured_at,
+            "received_at": event.received_at,
+            "latency_ms": max(
+                0,
+                round((event.received_at - event.measured_at).total_seconds() * 1000),
+            ),
+        }
+        for event in events
+    ]
 
 
 @app.post("/api/v1/agents/enroll", response_model=EnrollmentResponse)

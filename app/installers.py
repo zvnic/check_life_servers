@@ -2,6 +2,8 @@
 
 import shlex
 
+from app.version import __version__
+
 
 def linux_installer(public_url: str, enrollment_token: str) -> str:
     base_url = public_url.rstrip("/")
@@ -45,6 +47,7 @@ MONITOR_URL=$MONITOR_URL
 ENROLLMENT_TOKEN=$ENROLLMENT_TOKEN
 INSTALLATION_ID=$installation_id
 PLATFORM=$platform
+HEARTBEAT_INTERVAL=${{CLS_HEARTBEAT_INTERVAL:-60}}
 EOF
 
 cat > /usr/bin/cls-agent <<'CLS_AGENT'
@@ -83,13 +86,18 @@ while :; do
   event_id=$(cat /proc/sys/kernel/random/uuid 2>/dev/null || echo "$(date +%s)-$$-$sequence")
   measured_at=$(date -u +%Y-%m-%dT%H:%M:%SZ)
   uptime_seconds=$(cut -d. -f1 /proc/uptime 2>/dev/null || echo 0)
+  load_average=$(awk '{{print $1}}' /proc/loadavg 2>/dev/null || echo 0)
+  memory_usage_percent=$(awk '/MemTotal/ {{ total=$2 }} /MemAvailable/ {{ available=$2 }} END {{ if (total > 0) printf "%.2f", (total-available)*100/total; else print 0 }}' /proc/meminfo 2>/dev/null || echo 0)
+  disk_usage_percent=$(df -P / 2>/dev/null | awk 'NR == 2 {{ gsub("%", "", $5); print $5 + 0 }}' || echo 0)
   hostname_value=$(json_escape "$(hostname 2>/dev/null || echo unknown)")
-  body=$(printf '{{"schema_version":"1.0","event_id":"%s","server_id":"%s","sequence":%s,"measured_at":"%s","agent":{{"version":"0.1.0"}},"system":{{"hostname":"%s","uptime_seconds":%s}},"metadata":{{}}}}' \
-    "$event_id" "$SERVER_ID" "$sequence" "$measured_at" "$hostname_value" "$uptime_seconds")
+  architecture=$(json_escape "$(uname -m 2>/dev/null || echo unknown)")
+  kernel=$(json_escape "$(uname -r 2>/dev/null || echo unknown)")
+  body=$(printf '{{"schema_version":"1.0","event_id":"%s","server_id":"%s","sequence":%s,"measured_at":"%s","agent":{{"version":"{__version__}"}},"system":{{"hostname":"%s","platform":"%s","architecture":"%s","kernel":"%s","uptime_seconds":%s,"load_average_1m":%s,"memory_usage_percent":%s,"disk_usage_percent":%s}},"metadata":{{}}}}' \
+    "$event_id" "$SERVER_ID" "$sequence" "$measured_at" "$hostname_value" "$PLATFORM" "$architecture" "$kernel" "$uptime_seconds" "$load_average" "$memory_usage_percent" "$disk_usage_percent")
   curl -fsS --connect-timeout 15 --max-time 30 \
     -H "Authorization: Bearer $CREDENTIAL" -H 'Content-Type: application/json' \
     -d "$body" "$MONITOR_URL/api/v1/agents/heartbeat" >/dev/null || true
-  sleep 60
+  sleep "$HEARTBEAT_INTERVAL"
 done
 CLS_AGENT
 chmod 0755 /usr/bin/cls-agent
@@ -164,7 +172,7 @@ def routeros_installer(public_url: str, enrollment_token: str) -> str:
   :set clsSequence ($clsSequence + 1)
   :local eventId ([/system clock get date] . "-" . [/system clock get time] . "-" . $clsSequence)
   :local measuredAt ([/system clock get date] . "T" . [/system clock get time] . "Z")
-  :local body ("{{\\"schema_version\\":\\"1.0\\",\\"event_id\\":\\"" . $eventId . "\\",\\"server_id\\":\\"" . $clsServerId . "\\",\\"sequence\\":" . $clsSequence . ",\\"measured_at\\":\\"" . $measuredAt . "\\",\\"agent\\":{{\\"version\\":\\"0.1.0\\"}},\\"system\\":{{\\"hostname\\":\\"" . [/system identity get name] . "\\",\\"uptime_seconds\\":0}},\\"metadata\\":{{}}}}")
+  :local body ("{{\\"schema_version\\":\\"1.0\\",\\"event_id\\":\\"" . $eventId . "\\",\\"server_id\\":\\"" . $clsServerId . "\\",\\"sequence\\":" . $clsSequence . ",\\"measured_at\\":\\"" . $measuredAt . "\\",\\"agent\\":{{\\"version\\":\\"{__version__}\\"}},\\"system\\":{{\\"hostname\\":\\"" . [/system identity get name] . "\\",\\"platform\\":\\"routeros\\",\\"architecture\\":\\"" . [/system resource get architecture-name] . "\\",\\"cpu_usage_percent\\":" . [/system resource get cpu-load] . ",\\"uptime_seconds\\":0}},\\"metadata\\":{{}}}}")
   /tool fetch url=($clsMonitorUrl . "/api/v1/agents/heartbeat") http-method=post http-header-field=("Content-Type: application/json,Authorization: Bearer " . $clsCredential) http-data=$body check-certificate=yes keep-result=no
 }}
 /system scheduler remove [find name="cls-heartbeat"]

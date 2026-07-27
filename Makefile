@@ -9,7 +9,7 @@ PLATFORM ?=
 
 .PHONY: help version version-set version-check env build up down restart ps logs migrate admin-create \
 	admin-create-generated admin-reset-password enrollment-create test test-unit \
-	test-integration lint doctor clean
+	test-integration test-devices lint doctor clean
 
 help: ## Показать команды
 	@awk 'BEGIN {FS = ":.*## "}; /^[a-zA-Z0-9_-]+:.*## / {printf "%-26s %s\n", $$1, $$2}' $(MAKEFILE_LIST)
@@ -75,6 +75,9 @@ test-unit: ## Выполнить unit-тесты
 
 test-integration: ## Выполнить интеграционные тесты
 	$(COMPOSE) run --rm api python -m pytest -p no:cacheprovider tests/integration
+
+test-devices: ## Полный E2E: curl-установка на Ubuntu и OpenWrt в Docker
+	@./scripts/e2e-device-test.sh
 
 lint: ## Проверить стиль и типовые ошибки
 	$(COMPOSE) run --rm api ruff check --no-cache app tests

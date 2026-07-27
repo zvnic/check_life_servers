@@ -1,0 +1,10 @@
+FROM openwrt/rootfs:x86_64-24.10.8
+
+RUN mkdir -p /var/lock \
+    && opkg update \
+    && opkg install ca-bundle curl \
+    && rm -rf /tmp/opkg-lists
+
+COPY tests/e2e/devices/openwrt-network /etc/config/network
+
+CMD ["/sbin/init"]

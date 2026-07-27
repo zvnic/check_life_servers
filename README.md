@@ -63,3 +63,22 @@ CLS_PUBLIC_URL=https://monitor.example.com
 Домен должен обслуживаться через HTTPS с валидным сертификатом. Bootstrap-код
 действует 30 минут по умолчанию, хранится в БД только как SHA-256-хеш и
 погашается при первой успешной регистрации.
+
+## Полный тест агентов перед deployment
+
+Команда создаёт отдельный временный stack с PostgreSQL, API, reverse proxy,
+Ubuntu 24.04 и OpenWrt 24.10.8. На оба устройства агент устанавливается
+настоящей командой `curl | sh`. Проверяются systemd/procd, права credentials,
+несколько heartbeat, системные метрики и единая версия агента.
+
+```bash
+make test-devices
+```
+
+После теста контейнеры, сеть и тестовая БД удаляются автоматически. Для
+диагностики неуспешного прогона стенд можно временно сохранить:
+
+```bash
+KEEP_E2E=1 make test-devices
+docker compose -p cls-device-e2e -f tests/e2e/compose.yaml down --volumes
+```

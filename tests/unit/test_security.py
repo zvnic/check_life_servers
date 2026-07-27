@@ -15,7 +15,8 @@ def test_password_is_argon2id_hash() -> None:
 
 def test_password_policy() -> None:
     with pytest.raises(ValueError):
-        validate_password("short")
+        validate_password("Short-42")
+    validate_password("Short-420")
 
 
 def test_token_hash_is_stable_and_not_plaintext() -> None:

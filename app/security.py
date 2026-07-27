@@ -19,8 +19,8 @@ def verify_password(password_hash: str, password: str) -> bool:
 
 
 def validate_password(password: str) -> None:
-    if len(password) < 14:
-        raise ValueError("Пароль должен содержать не менее 14 символов")
+    if len(password) < 9:
+        raise ValueError("Пароль должен содержать не менее 9 символов")
     if password.lower() == password or password.upper() == password:
         raise ValueError("Пароль должен содержать буквы разного регистра")
     if not any(char.isdigit() for char in password):

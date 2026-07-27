@@ -29,7 +29,7 @@ def password_input(generate: bool) -> tuple[str, bool]:
     if generate:
         return random_password(), True
     print(
-        "Требования к паролю: минимум 14 символов, "
+        "Требования к паролю: минимум 9 символов, "
         "строчные и заглавные буквы, минимум одна цифра."
     )
     while True:

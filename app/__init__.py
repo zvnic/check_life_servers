@@ -1,0 +1,2 @@
+"""Check Life Servers backend."""
+

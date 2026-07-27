@@ -25,14 +25,13 @@ version-check: ## Сверить source, runtime и Python package
 	@./scripts/check-version.sh
 
 env: ## Создать .env из безопасного примера
-	@test -f .env || cp .env.example .env
-	@chmod 600 .env
-	@echo ".env создан. Настройте пароль БД, CLS_PUBLIC_URL и WEB_PORT."
+	@./scripts/generate-env.sh
 
 build: ## Собрать Docker-образы
 	$(COMPOSE) build
 
 up: ## Запустить БД, миграции, API и web dashboard
+	@./scripts/validate-env.sh
 	$(COMPOSE) up -d db
 	$(COMPOSE) run --rm api alembic upgrade head
 	$(COMPOSE) up -d api frontend
@@ -83,6 +82,7 @@ lint: ## Проверить стиль и типовые ошибки
 	$(COMPOSE) run --rm api ruff check --no-cache app tests
 
 doctor: ## Проверить конфигурацию Docker Compose
+	@./scripts/validate-env.sh
 	@./scripts/doctor.sh
 
 clean: ## Удалить только локальные кеши

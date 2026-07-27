@@ -6,7 +6,8 @@
 
 ```bash
 make env
-# замените POSTGRES_PASSWORD и пароль в DATABASE_URL в .env
+# случайный пароль PostgreSQL будет создан и согласован автоматически
+# настройте CLS_PUBLIC_URL, WEB_BIND_ADDRESS и WEB_PORT в .env
 make build
 make up
 make admin-create

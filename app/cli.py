@@ -13,17 +13,37 @@ from app.security import hash_password, new_token, token_hash, validate_password
 
 
 def random_password() -> str:
+    required = [
+        secrets.choice(string.ascii_lowercase),
+        secrets.choice(string.ascii_uppercase),
+        secrets.choice(string.digits),
+        secrets.choice("!@#$%^&*"),
+    ]
     alphabet = string.ascii_letters + string.digits + "!@#$%^&*"
-    return "".join(secrets.choice(alphabet) for _ in range(24))
+    password = required + [secrets.choice(alphabet) for _ in range(20)]
+    secrets.SystemRandom().shuffle(password)
+    return "".join(password)
 
 
 def password_input(generate: bool) -> tuple[str, bool]:
     if generate:
         return random_password(), True
-    password = getpass.getpass("Пароль: ")
-    if password != getpass.getpass("Повторите пароль: "):
-        raise SystemExit("Пароли не совпадают")
-    return password, False
+    print(
+        "Требования к паролю: минимум 14 символов, "
+        "строчные и заглавные буквы, минимум одна цифра."
+    )
+    while True:
+        password = getpass.getpass("Пароль: ")
+        confirmation = getpass.getpass("Повторите пароль: ")
+        if password != confirmation:
+            print("Ошибка: пароли не совпадают. Попробуйте ещё раз.")
+            continue
+        try:
+            validate_password(password)
+        except ValueError as error:
+            print(f"Ошибка: {error}. Попробуйте ещё раз.")
+            continue
+        return password, False
 
 
 def admin_create(login: str, generate: bool) -> None:
@@ -47,7 +67,6 @@ def admin_create(login: str, generate: bool) -> None:
 
 def admin_reset_password(login: str) -> None:
     password, _ = password_input(False)
-    validate_password(password)
     with SessionLocal.begin() as db:
         user = db.scalar(select(User).where(User.login == login))
         if not user:
@@ -98,5 +117,8 @@ def main() -> None:
 
 
 if __name__ == "__main__":
-    main()
-
+    try:
+        main()
+    except KeyboardInterrupt:
+        print("\nОперация отменена.")
+        raise SystemExit(130) from None

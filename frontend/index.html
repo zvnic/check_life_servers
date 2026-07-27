@@ -12,28 +12,28 @@
   <aside>
     <a class="brand" href="/"><span class="logo"><i></i><i></i><i></i></span><span><b>CHECK LIFE</b><small>SERVER MONITOR</small></span></a>
     <nav>
-      <button class="active">⌁ <span>Обзор</span></button>
-      <button>▱ <span>Объекты</span></button>
-      <button>⚠ <span>Инциденты</span></button>
-      <button>⌇ <span>Аналитика</span></button>
-      <button>⚙ <span>Настройки</span></button>
+      <button class="active" data-view="overview">⌁ <span>Обзор</span></button>
+      <button data-view="objects">▱ <span>Объекты</span></button>
+      <button data-view="incidents">⚠ <span>Инциденты</span></button>
+      <button data-view="analytics">⌇ <span>Аналитика</span></button>
+      <button data-view="settings">⚙ <span>Настройки</span></button>
     </nav>
     <div class="monitor"><i></i><span><b>Монитор работает</b><small id="monitor-time">проверка…</small><small>версия <b class="service-version">—</b></small></span></div>
   </aside>
   <main>
     <header>
-      <div><p class="eyebrow">ЦЕНТР УПРАВЛЕНИЯ</p><h1>Состояние инфраструктуры</h1></div>
+      <div><p id="page-eyebrow" class="eyebrow">ЦЕНТР УПРАВЛЕНИЯ</p><h1 id="page-title">Состояние инфраструктуры</h1></div>
       <div class="actions"><button id="refresh">↻</button><span class="user">● <b id="current-user">admin</b></span><button id="logout">Выйти</button></div>
     </header>
 
-    <section class="metrics">
+    <section id="metrics-section" class="metrics">
       <article class="metric hero"><p>ОБЩАЯ ДОСТУПНОСТЬ</p><div><strong id="uptime">—</strong><em>%</em></div><small>Текущий срез зарегистрированных объектов</small></article>
       <article class="metric"><p>ВСЕГО ОБЪЕКТОВ</p><strong id="total">—</strong><small><i class="dot green"></i><b id="online">—</b> в сети</small></article>
       <article class="metric"><p>НЕДОСТУПНЫ</p><strong id="offline">—</strong><small><i class="dot red"></i>требуют внимания</small></article>
       <article class="metric"><p>БЕЗ ДАННЫХ</p><strong id="unknown">—</strong><small><i class="dot gray"></i>ожидают heartbeat</small></article>
     </section>
 
-    <section class="grid">
+    <section id="analytics-section" class="grid">
       <article class="panel chart-panel">
         <div class="title"><div><p class="eyebrow">СИГНАЛЫ</p><h2>Задержка heartbeat</h2></div><span>последние 200</span></div>
         <div id="chart" class="chart empty">
@@ -52,13 +52,45 @@
       </article>
     </section>
 
-    <section class="panel servers">
-      <div class="title"><div><p class="eyebrow">ИНФРАСТРУКТУРА</p><h2>Контролируемые объекты</h2></div><label>⌕ <input id="search" placeholder="Найти объект"></label></div>
+    <section id="objects-section" class="panel servers">
+      <div class="title"><div><p class="eyebrow">ИНФРАСТРУКТУРА</p><h2 id="objects-title">Контролируемые объекты</h2></div><label>⌕ <input id="search" placeholder="Найти объект"></label></div>
       <div class="scroll"><table><thead><tr><th>ОБЪЕКТ</th><th>ПЛАТФОРМА</th><th>СТАТУС</th><th>ПОСЛЕДНИЙ HEARTBEAT</th><th>СИГНАЛЫ</th></tr></thead><tbody id="server-table"></tbody></table></div>
       <div id="empty" class="empty-list"><strong>Объекты ещё не зарегистрированы</strong><small>Создайте enrollment token и установите агент.</small><code>make enrollment-create SERVER_NAME=edge-01 PLATFORM=ubuntu</code></div>
     </section>
+
+    <section id="incidents-section" class="panel hidden-section">
+      <div class="title"><div><p class="eyebrow">ЖУРНАЛ СОБЫТИЙ</p><h2>Активные инциденты</h2></div><span id="incident-count">0 активных</span></div>
+      <div id="incident-list" class="incident-list"></div>
+      <div id="no-incidents" class="empty-list visible"><strong>Активных инцидентов нет</strong><small>Недоступные объекты появятся здесь автоматически.</small></div>
+    </section>
+
+    <section id="settings-section" class="hidden-section settings-grid">
+      <article class="panel settings-card">
+        <p class="eyebrow">СИСТЕМА</p><h2>Состояние сервиса</h2>
+        <dl>
+          <div><dt>Версия</dt><dd class="service-version">—</dd></div>
+          <div><dt>Backend API</dt><dd id="settings-api-status" class="ok">доступен</dd></div>
+          <div><dt>Пользователь</dt><dd id="settings-user">—</dd></div>
+          <div><dt>Роль</dt><dd id="settings-role">—</dd></div>
+        </dl>
+        <button id="check-system" class="primary-action">Проверить систему</button>
+      </article>
+      <article class="panel settings-card">
+        <p class="eyebrow">РЕГИСТРАЦИЯ</p><h2>Добавить устройство</h2>
+        <p>Создайте одноразовый enrollment token на сервере, затем установите платформенный агент.</p>
+        <code id="enrollment-command">make enrollment-create SERVER_NAME=edge-01 PLATFORM=ubuntu</code>
+        <button class="secondary-action" data-copy="#enrollment-command">Копировать команду</button>
+      </article>
+      <article class="panel settings-card">
+        <p class="eyebrow">БЕЗОПАСНОСТЬ</p><h2>Пароль администратора</h2>
+        <p>Смена пароля выполняется внутри backend-контейнера без передачи секрета через браузер.</p>
+        <code id="password-command">make admin-reset-password ADMIN_LOGIN=admin</code>
+        <button class="secondary-action" data-copy="#password-command">Копировать команду</button>
+      </article>
+    </section>
   </main>
 </div>
+<div id="toast" class="toast"></div>
 
 <div id="login-screen" class="login hidden">
   <form id="login-form">

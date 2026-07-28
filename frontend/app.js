@@ -86,7 +86,10 @@ function renderTimeline() {
   const target = $("#uptime-timeline");
   const start = new Date(state.availability?.from || Date.now() - 86400000).getTime();
   const end = new Date(state.availability?.to || Date.now()).getTime();
-  target.innerHTML = (state.availability?.servers || []).map((server) => `
+  const servers = (state.availability?.servers || []).filter(
+    (server) => state.currentView !== "analytics" || server.server_id === state.selected
+  );
+  target.innerHTML = servers.map((server) => `
     <div class="timeline-row" data-id="${server.server_id}">
       <button><strong>${escapeHtml(server.name)}</strong><small>${server.uptime_percent == null ? "нет данных" : `${server.uptime_percent.toFixed(2)}%`}</small></button>
       <div class="timeline-track">${server.segments.map((segment) => {
@@ -193,6 +196,7 @@ function renderResources(latest = {}) {
 async function loadHeartbeats(id) {
   if (!id) return;
   state.selected = id; $("#analytics-server").value = id;
+  renderTimeline();
   const events = await api(`/api/v1/servers/${id}/heartbeats`);
   renderResources(events[0] || availabilityFor(id)?.latest || {});
   renderHeartbeatHealth(events);
@@ -224,6 +228,7 @@ function switchView(view) {
   $("#settings-section").classList.toggle("hidden-section", view !== "settings");
   document.querySelectorAll("nav [data-view]").forEach((button) => button.classList.toggle("active", button.dataset.view === view));
   text("#page-eyebrow", viewMeta[view][0]); text("#page-title", viewMeta[view][1]);
+  renderTimeline();
   if (view === "analytics" && state.selected) loadHeartbeats(state.selected);
   window.history.replaceState(null, "", `#${view}`);
 }

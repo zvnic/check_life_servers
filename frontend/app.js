@@ -214,7 +214,10 @@ const viewMeta = {
 function switchView(view) {
   state.currentView = view;
   $("#metrics-section").classList.toggle("hidden-section", view !== "overview");
-  $("#timeline-section").classList.toggle("hidden-section", view !== "overview");
+  $("#timeline-section").classList.toggle(
+    "hidden-section",
+    view !== "overview" && view !== "analytics"
+  );
   $("#analytics-section").classList.toggle("hidden-section", view !== "analytics");
   $("#objects-section").classList.toggle("hidden-section", view !== "overview" && view !== "objects");
   $("#incidents-section").classList.toggle("hidden-section", view !== "incidents");

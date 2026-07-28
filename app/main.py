@@ -387,10 +387,7 @@ def server_heartbeats(
             "sequence": event.sequence,
             "measured_at": event.measured_at,
             "received_at": event.received_at,
-            "latency_ms": max(
-                0,
-                round((event.received_at - event.measured_at).total_seconds() * 1000),
-            ),
+            "agent": event.payload.get("agent", {}),
             "system": event.payload.get("system", {}),
             "network": event.payload.get("network", {}),
             "services": event.payload.get("services", []),

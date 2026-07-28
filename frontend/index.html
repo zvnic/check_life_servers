@@ -51,16 +51,8 @@
         <select id="analytics-server" aria-label="Выберите устройство"></select>
       </div>
       <div id="resource-cards" class="resource-cards"></div>
-      <article class="panel chart-panel">
-        <div class="title"><div><p class="eyebrow">ТРАНСПОРТ</p><h2>Задержка доставки heartbeat</h2></div><span>миллисекунды · последние 200 точек</span></div>
-        <div id="chart" class="chart empty">
-          <svg viewBox="0 0 900 240" preserveAspectRatio="none">
-            <defs><linearGradient id="fill" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#69f5bd" stop-opacity=".26"/><stop offset="1" stop-color="#69f5bd" stop-opacity="0"/></linearGradient></defs>
-            <g class="chart-grid"><line x1="0" y1="50" x2="900" y2="50"/><line x1="0" y1="110" x2="900" y2="110"/><line x1="0" y1="170" x2="900" y2="170"/><line x1="0" y1="225" x2="900" y2="225"/></g>
-            <path class="area" d=""/><path class="line" d=""/>
-          </svg><p>Выберите устройство</p>
-        </div>
-      </article>
+      <section id="heartbeat-health" class="heartbeat-health"></section>
+      <section id="history-charts" class="history-charts"></section>
     </section>
 
     <section id="objects-section" class="panel servers">

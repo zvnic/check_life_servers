@@ -112,15 +112,70 @@ function renderIncidents() {
     <time>с ${formatTime(server.last_seen_at)}</time></article>`).join("");
   $("#no-incidents").classList.toggle("visible", incidents.length === 0);
 }
-function drawChart(events) {
-  const chart = $("#chart");
-  if (!events.length) { chart.classList.add("empty"); return; }
-  chart.classList.remove("empty");
-  const values = [...events].reverse().map((event) => Math.min(event.latency_ms, 30000));
-  const max = Math.max(...values, 1000);
-  const points = values.map((value, index) => [values.length === 1 ? 450 : index / (values.length - 1) * 900, 220 - value / max * 190]);
-  const line = points.map(([x, y], index) => `${index ? "L" : "M"}${x.toFixed(1)},${y.toFixed(1)}`).join(" ");
-  $(".line").setAttribute("d", line); $(".area").setAttribute("d", `${line} L900,240 L0,240 Z`);
+function sparkline(values, fixedMax = null) {
+  if (!values.length) return "";
+  const min = fixedMax == null ? Math.min(...values) : 0;
+  const max = fixedMax ?? Math.max(...values, min + 1);
+  const range = Math.max(max - min, 1);
+  const points = values.map((value, index) => {
+    const x = values.length === 1 ? 50 : index / (values.length - 1) * 100;
+    const y = 92 - (value - min) / range * 78;
+    return `${x.toFixed(2)},${y.toFixed(2)}`;
+  }).join(" ");
+  return `<svg viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">
+    <polygon points="0,100 ${points} 100,100"></polygon><polyline points="${points}"></polyline>
+  </svg>`;
+}
+function renderHeartbeatHealth(events) {
+  if (!events.length) {
+    $("#heartbeat-health").innerHTML = `<article class="panel empty-list visible"><strong>Heartbeat ещё не поступал</strong></article>`;
+    return;
+  }
+  const ordered = [...events].reverse();
+  const latest = ordered.at(-1);
+  const expected = Number(latest.agent?.interval_seconds || 60);
+  const gaps = ordered.slice(1).map((event, index) =>
+    Math.max(0, (new Date(event.received_at) - new Date(ordered[index].received_at)) / 1000)
+  );
+  const maxGap = gaps.length ? Math.max(...gaps) : 0;
+  const missed = gaps.reduce((total, gap) => total + Math.max(0, Math.floor(gap / expected) - 1), 0);
+  const age = Math.max(0, Math.round((Date.now() - new Date(latest.received_at)) / 1000));
+  const healthy = age <= expected * 3 && maxGap <= expected * 3;
+  $("#heartbeat-health").innerHTML = `<article class="panel pulse-card ${healthy ? "healthy" : "warning"}">
+    <div><p class="eyebrow">НАДЁЖНОСТЬ АГЕНТА</p><h2>${healthy ? "Heartbeat поступает стабильно" : "Есть задержки или пропуски"}</h2></div>
+    <dl>
+      <div><dt>Последний сигнал</dt><dd>${duration(age)} назад</dd></div>
+      <div><dt>Ожидаемый интервал</dt><dd>${duration(expected)}</dd></div>
+      <div><dt>Максимальный разрыв</dt><dd>${duration(maxGap)}</dd></div>
+      <div><dt>Предполагаемые пропуски</dt><dd>${missed}</dd></div>
+    </dl>
+  </article>`;
+}
+function renderHistoryCharts(events) {
+  const ordered = [...events].reverse();
+  const definitions = [
+    {label:"Нагрузка", key:"load_average_1m", unit:"", note:"load average за 1 минуту"},
+    {label:"Память", key:"memory_usage_percent", unit:"%", note:"использование RAM", max:100},
+    {label:"Диск /", key:"disk_usage_percent", unit:"%", note:"занято на корневом разделе", max:100},
+  ];
+  $("#history-charts").innerHTML = definitions.map((definition) => {
+    const samples = ordered
+      .map((event) => Number(event.system?.[definition.key]))
+      .filter((value) => Number.isFinite(value));
+    if (!samples.length) return `<article class="panel history-card no-data">
+      <div><p>${definition.label}</p><strong>Нет истории</strong></div><small>Обновите агент для передачи этой метрики</small>
+    </article>`;
+    const latest = samples.at(-1);
+    const minimum = Math.min(...samples);
+    const maximum = Math.max(...samples);
+    const warning = definition.key === "disk_usage_percent" && latest >= 90;
+    return `<article class="panel history-card ${warning ? "warning" : ""}">
+      <div class="history-head"><div><p>${definition.label}</p><strong>${latest.toFixed(definition.unit ? 1 : 2)}${definition.unit}</strong></div>
+      <small>min ${minimum.toFixed(1)}${definition.unit} · max ${maximum.toFixed(1)}${definition.unit}</small></div>
+      <div class="sparkline">${sparkline(samples, definition.max)}</div>
+      <footer><span>${definition.note}</span><span>${samples.length} точек</span></footer>
+    </article>`;
+  }).join("");
 }
 function renderResources(latest = {}) {
   const system = latest.system || {}; const network = latest.network || {};
@@ -139,7 +194,9 @@ async function loadHeartbeats(id) {
   if (!id) return;
   state.selected = id; $("#analytics-server").value = id;
   const events = await api(`/api/v1/servers/${id}/heartbeats`);
-  drawChart(events); renderResources(events[0] || availabilityFor(id)?.latest || {});
+  renderResources(events[0] || availabilityFor(id)?.latest || {});
+  renderHeartbeatHealth(events);
+  renderHistoryCharts(events);
 }
 function renderServerSelect() {
   $("#analytics-server").innerHTML = state.servers.map((server) => `<option value="${server.id}">${escapeHtml(server.name)}</option>`).join("");

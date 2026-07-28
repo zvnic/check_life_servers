@@ -87,13 +87,29 @@ while :; do
   measured_at=$(date -u +%Y-%m-%dT%H:%M:%SZ)
   uptime_seconds=$(cut -d. -f1 /proc/uptime 2>/dev/null || echo 0)
   load_average=$(awk '{{print $1}}' /proc/loadavg 2>/dev/null || echo 0)
+  cpu_count=$(getconf _NPROCESSORS_ONLN 2>/dev/null || awk '/^processor/ {{n++}} END {{print n+0}}' /proc/cpuinfo 2>/dev/null || echo 1)
   memory_usage_percent=$(awk '/MemTotal/ {{ total=$2 }} /MemAvailable/ {{ available=$2 }} END {{ if (total > 0) printf "%.2f", (total-available)*100/total; else print 0 }}' /proc/meminfo 2>/dev/null || echo 0)
+  memory_total_bytes=$(awk '/MemTotal/ {{print $2*1024}}' /proc/meminfo 2>/dev/null || echo 0)
+  memory_available_bytes=$(awk '/MemAvailable/ {{print $2*1024}}' /proc/meminfo 2>/dev/null || echo 0)
   disk_usage_percent=$(df -P / 2>/dev/null | awk 'NR == 2 {{ gsub("%", "", $5); print $5 + 0 }}' || echo 0)
+  disk_total_bytes=$(df -Pk / 2>/dev/null | awk 'NR == 2 {{print $2*1024}}' || echo 0)
+  disk_available_bytes=$(df -Pk / 2>/dev/null | awk 'NR == 2 {{print $4*1024}}' || echo 0)
+  process_count=$(ps 2>/dev/null | awk 'NR > 1 {{n++}} END {{print n+0}}')
+  network_rx_bytes=$(awk -F'[: ]+' 'NR>2 {{sum+=$3}} END {{print sum+0}}' /proc/net/dev 2>/dev/null || echo 0)
+  network_tx_bytes=$(awk -F'[: ]+' 'NR>2 {{sum+=$11}} END {{print sum+0}}' /proc/net/dev 2>/dev/null || echo 0)
+  docker_total=0
+  docker_running=0
+  docker_unhealthy=0
+  if command -v docker >/dev/null 2>&1; then
+    docker_total=$(docker ps -aq 2>/dev/null | wc -l | tr -d ' ')
+    docker_running=$(docker ps -q 2>/dev/null | wc -l | tr -d ' ')
+    docker_unhealthy=$(docker ps --filter health=unhealthy -q 2>/dev/null | wc -l | tr -d ' ')
+  fi
   hostname_value=$(json_escape "$(hostname 2>/dev/null || echo unknown)")
   architecture=$(json_escape "$(uname -m 2>/dev/null || echo unknown)")
   kernel=$(json_escape "$(uname -r 2>/dev/null || echo unknown)")
-  body=$(printf '{{"schema_version":"1.0","event_id":"%s","server_id":"%s","sequence":%s,"measured_at":"%s","agent":{{"version":"{__version__}"}},"system":{{"hostname":"%s","platform":"%s","architecture":"%s","kernel":"%s","uptime_seconds":%s,"load_average_1m":%s,"memory_usage_percent":%s,"disk_usage_percent":%s}},"metadata":{{}}}}' \
-    "$event_id" "$SERVER_ID" "$sequence" "$measured_at" "$hostname_value" "$PLATFORM" "$architecture" "$kernel" "$uptime_seconds" "$load_average" "$memory_usage_percent" "$disk_usage_percent")
+  body=$(printf '{{"schema_version":"1.1","event_id":"%s","server_id":"%s","sequence":%s,"measured_at":"%s","agent":{{"version":"{__version__}","interval_seconds":%s}},"system":{{"hostname":"%s","platform":"%s","architecture":"%s","kernel":"%s","uptime_seconds":%s,"load_average_1m":%s,"cpu_count":%s,"memory_usage_percent":%s,"memory_total_bytes":%s,"memory_available_bytes":%s,"disk_usage_percent":%s,"disk_total_bytes":%s,"disk_available_bytes":%s,"process_count":%s}},"network":{{"rx_bytes":%s,"tx_bytes":%s}},"services":[{{"type":"docker","total":%s,"running":%s,"unhealthy":%s}}],"metadata":{{}}}}' \
+    "$event_id" "$SERVER_ID" "$sequence" "$measured_at" "$HEARTBEAT_INTERVAL" "$hostname_value" "$PLATFORM" "$architecture" "$kernel" "$uptime_seconds" "$load_average" "$cpu_count" "$memory_usage_percent" "$memory_total_bytes" "$memory_available_bytes" "$disk_usage_percent" "$disk_total_bytes" "$disk_available_bytes" "$process_count" "$network_rx_bytes" "$network_tx_bytes" "$docker_total" "$docker_running" "$docker_unhealthy")
   curl -fsS --connect-timeout 15 --max-time 30 \
     -H "Authorization: Bearer $CREDENTIAL" -H 'Content-Type: application/json' \
     -d "$body" "$MONITOR_URL/api/v1/agents/heartbeat" >/dev/null || true

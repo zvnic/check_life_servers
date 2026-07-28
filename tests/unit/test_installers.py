@@ -13,6 +13,10 @@ def test_linux_installer_detects_and_configures_supported_platforms() -> None:
     assert "memory_usage_percent" in script
     assert "disk_usage_percent" in script
     assert "load_average_1m" in script
+    assert "memory_total_bytes" in script
+    assert "network_rx_bytes" in script
+    assert "docker_unhealthy" in script
+    assert '"schema_version":"1.1"' in script
     assert f'"version":"{__version__}"' in script
     assert "HEARTBEAT_INTERVAL=${CLS_HEARTBEAT_INTERVAL:-60}" in script
     assert "token-value" in script

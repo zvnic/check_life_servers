@@ -197,6 +197,53 @@ def server_status(last_seen_at: datetime | None, now: datetime) -> str:
     return "online" if last_seen_at >= now - timedelta(seconds=180) else "offline"
 
 
+def availability_segments(
+    events: list[HeartbeatEvent],
+    start: datetime,
+    end: datetime,
+    heartbeat_grace_seconds: int = 180,
+) -> tuple[list[dict], int]:
+    """Build explicit up/down/unknown intervals from heartbeat history."""
+    points = sorted(event.received_at for event in events if event.received_at <= end)
+    segments: list[dict] = []
+    cursor = start
+    up_seconds = 0
+
+    for point in points:
+        up_start = max(start, point)
+        up_end = min(end, point + timedelta(seconds=heartbeat_grace_seconds))
+        if up_end <= cursor:
+            continue
+        if up_start > cursor:
+            segments.append({"status": "down", "from": cursor, "to": up_start})
+        actual_start = max(cursor, up_start)
+        segments.append({"status": "up", "from": actual_start, "to": up_end})
+        up_seconds += max(0, int((up_end - actual_start).total_seconds()))
+        cursor = up_end
+
+    if cursor < end:
+        segments.append(
+            {
+                "status": "unknown" if not points else "down",
+                "from": cursor,
+                "to": end,
+            }
+        )
+
+    # Merge adjacent intervals so the browser receives a compact timeline.
+    merged: list[dict] = []
+    for segment in segments:
+        if (
+            merged
+            and merged[-1]["status"] == segment["status"]
+            and merged[-1]["to"] == segment["from"]
+        ):
+            merged[-1]["to"] = segment["to"]
+        else:
+            merged.append(segment)
+    return merged, up_seconds
+
+
 @app.get("/api/v1/dashboard/summary")
 def dashboard_summary(
     _: User = Depends(current_user),
@@ -214,9 +261,81 @@ def dashboard_summary(
         "online": online,
         "offline": offline,
         "unknown": unknown,
-        "uptime_percent": round(online / total * 100, 2) if total else None,
+        "online_percent": round(online / total * 100, 2) if total else None,
         "active_incidents": offline,
         "generated_at": now,
+    }
+
+
+@app.get("/api/v1/dashboard/availability")
+def dashboard_availability(
+    hours: int = Query(default=24, ge=1, le=24 * 90),
+    _: User = Depends(current_user),
+    db: Session = Depends(get_db),
+) -> dict:
+    end = datetime.now(UTC)
+    start = end - timedelta(hours=hours)
+    servers = list(db.scalars(select(Server).order_by(Server.name)))
+    result = []
+    total_up = 0
+    total_observed = 0
+
+    for server in servers:
+        events = list(
+            db.scalars(
+                select(HeartbeatEvent)
+                .where(
+                    HeartbeatEvent.server_id == server.id,
+                    HeartbeatEvent.received_at >= start - timedelta(seconds=180),
+                    HeartbeatEvent.received_at <= end,
+                )
+                .order_by(HeartbeatEvent.received_at)
+            )
+        )
+        segments, up_seconds = availability_segments(events, start, end)
+        observed_seconds = sum(
+            int((item["to"] - item["from"]).total_seconds())
+            for item in segments
+            if item["status"] != "unknown"
+        )
+        down_seconds = sum(
+            int((item["to"] - item["from"]).total_seconds())
+            for item in segments
+            if item["status"] == "down"
+        )
+        total_up += up_seconds
+        total_observed += observed_seconds
+        latest_payload = events[-1].payload if events else {}
+        result.append(
+            {
+                "server_id": str(server.id),
+                "name": server.name,
+                "platform": server.platform,
+                "status": server_status(server.last_seen_at, end),
+                "uptime_percent": (
+                    round(up_seconds / observed_seconds * 100, 3)
+                    if observed_seconds
+                    else None
+                ),
+                "downtime_seconds": down_seconds,
+                "segments": segments,
+                "latest": {
+                    "system": latest_payload.get("system", {}),
+                    "network": latest_payload.get("network", {}),
+                    "services": latest_payload.get("services", []),
+                    "agent": latest_payload.get("agent", {}),
+                },
+            }
+        )
+
+    return {
+        "from": start,
+        "to": end,
+        "hours": hours,
+        "uptime_percent": (
+            round(total_up / total_observed * 100, 3) if total_observed else None
+        ),
+        "servers": result,
     }
 
 
@@ -272,6 +391,9 @@ def server_heartbeats(
                 0,
                 round((event.received_at - event.measured_at).total_seconds() * 1000),
             ),
+            "system": event.payload.get("system", {}),
+            "network": event.payload.get("network", {}),
+            "services": event.payload.get("services", []),
         }
         for event in events
     ]

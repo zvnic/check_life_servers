@@ -37,12 +37,14 @@
       <div class="title">
         <div><p class="eyebrow">ИСТОРИЯ ДОСТУПНОСТИ</p><h2>Когда устройства были недоступны</h2></div>
         <div class="range-picker" aria-label="Период">
-          <button data-hours="24" class="active">24 часа</button><button data-hours="168">7 дней</button><button data-hours="720">30 дней</button>
+          <button data-period="day" class="active">Сегодня</button><button data-period="week">7 дней</button><button data-period="month">30 дней</button>
         </div>
       </div>
       <div class="timeline-legend"><span><i class="dot green"></i>доступен</span><span><i class="dot red"></i>недоступен</span><span><i class="dot gray"></i>нет данных</span><small>Наведите на сегмент для точного времени</small></div>
       <div id="uptime-timeline" class="uptime-timeline"></div>
       <div id="timeline-axis" class="timeline-axis"></div>
+      <div id="availability-totals" class="availability-totals"></div>
+      <div id="availability-details" class="availability-details"></div>
     </section>
 
     <section id="analytics-section" class="analytics-only hidden-section">
@@ -50,6 +52,7 @@
         <div><p class="eyebrow">РЕСУРСЫ И СЕРВИСЫ</p><h2>Диагностика устройства</h2></div>
         <select id="analytics-server" aria-label="Выберите устройство"></select>
       </div>
+      <div id="data-freshness" class="data-freshness"></div>
       <div id="resource-cards" class="resource-cards"></div>
       <section id="heartbeat-health" class="heartbeat-health"></section>
       <section id="history-charts" class="history-charts"></section>

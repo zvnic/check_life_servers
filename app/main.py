@@ -1,4 +1,4 @@
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, datetime, timedelta, timezone
 from uuid import UUID
 
 from fastapi import (
@@ -244,6 +244,64 @@ def availability_segments(
     return merged, up_seconds
 
 
+def availability_days(
+    segments: list[dict],
+    start: datetime,
+    end: datetime,
+    timezone_offset_minutes: int,
+) -> list[dict]:
+    """Split availability intervals into browser-local calendar days."""
+    local_timezone = timezone(timedelta(minutes=-timezone_offset_minutes))
+    current_date = start.astimezone(local_timezone).date()
+    last_date = end.astimezone(local_timezone).date()
+    days = []
+
+    while current_date <= last_date:
+        day_start_local = datetime.combine(
+            current_date, datetime.min.time(), tzinfo=local_timezone
+        )
+        day_start = max(start, day_start_local.astimezone(UTC))
+        day_end = min(end, (day_start_local + timedelta(days=1)).astimezone(UTC))
+        if day_end <= day_start:
+            current_date += timedelta(days=1)
+            continue
+
+        intervals = []
+        totals = {"up": 0, "down": 0, "unknown": 0}
+        for segment in segments:
+            interval_start = max(day_start, segment["from"])
+            interval_end = min(day_end, segment["to"])
+            if interval_end <= interval_start:
+                continue
+            seconds = int((interval_end - interval_start).total_seconds())
+            totals[segment["status"]] += seconds
+            intervals.append(
+                {
+                    "status": segment["status"],
+                    "from": interval_start,
+                    "to": interval_end,
+                    "duration_seconds": seconds,
+                }
+            )
+        observed = totals["up"] + totals["down"]
+        days.append(
+            {
+                "date": current_date.isoformat(),
+                "from": day_start,
+                "to": day_end,
+                "uptime_seconds": totals["up"],
+                "downtime_seconds": totals["down"],
+                "unknown_seconds": totals["unknown"],
+                "uptime_percent": (
+                    round(totals["up"] / observed * 100, 3) if observed else None
+                ),
+                "intervals": intervals,
+            }
+        )
+        current_date += timedelta(days=1)
+    return days
+
+
 @app.get("/api/v1/dashboard/summary")
 def dashboard_summary(
     _: User = Depends(current_user),
@@ -269,12 +327,18 @@ def dashboard_summary(
 
 @app.get("/api/v1/dashboard/availability")
 def dashboard_availability(
-    hours: int = Query(default=24, ge=1, le=24 * 90),
+    period: str = Query(default="day", pattern="^(day|week|month)$"),
+    timezone_offset_minutes: int = Query(default=0, ge=-840, le=840),
     _: User = Depends(current_user),
     db: Session = Depends(get_db),
 ) -> dict:
     end = datetime.now(UTC)
-    start = end - timedelta(hours=hours)
+    local_timezone = timezone(timedelta(minutes=-timezone_offset_minutes))
+    local_midnight = end.astimezone(local_timezone).replace(
+        hour=0, minute=0, second=0, microsecond=0
+    )
+    days_by_period = {"day": 1, "week": 7, "month": 30}
+    start = (local_midnight - timedelta(days=days_by_period[period] - 1)).astimezone(UTC)
     servers = list(db.scalars(select(Server).order_by(Server.name)))
     result = []
     total_up = 0
@@ -293,6 +357,9 @@ def dashboard_availability(
             )
         )
         segments, up_seconds = availability_segments(events, start, end)
+        days = availability_days(
+            segments, start, end, timezone_offset_minutes
+        )
         observed_seconds = sum(
             int((item["to"] - item["from"]).total_seconds())
             for item in segments
@@ -318,7 +385,15 @@ def dashboard_availability(
                     else None
                 ),
                 "downtime_seconds": down_seconds,
+                "uptime_seconds": up_seconds,
+                "unknown_seconds": sum(
+                    int((item["to"] - item["from"]).total_seconds())
+                    for item in segments
+                    if item["status"] == "unknown"
+                ),
                 "segments": segments,
+                "days": days,
+                "latest_received_at": server.last_seen_at,
                 "latest": {
                     "system": latest_payload.get("system", {}),
                     "network": latest_payload.get("network", {}),
@@ -331,7 +406,8 @@ def dashboard_availability(
     return {
         "from": start,
         "to": end,
-        "hours": hours,
+        "period": period,
+        "timezone_offset_minutes": timezone_offset_minutes,
         "uptime_percent": (
             round(total_up / total_observed * 100, 3) if total_observed else None
         ),

@@ -1,6 +1,6 @@
 const state = {
   servers: [], availability: null, selected: null, currentView: "overview",
-  currentUser: null, version: null, hours: 24,
+  currentUser: null, version: null, period: "day",
 };
 const $ = (selector) => document.querySelector(selector);
 
@@ -34,6 +34,27 @@ function duration(seconds) {
   if (seconds < 86400) return `${(seconds / 3600).toFixed(seconds < 36000 ? 1 : 0)} ч`;
   return `${(seconds / 86400).toFixed(1)} д`;
 }
+function preciseDuration(seconds) {
+  if (seconds == null) return "—";
+  const total = Math.max(0, Math.round(seconds));
+  const days = Math.floor(total / 86400);
+  const hours = Math.floor(total % 86400 / 3600);
+  const minutes = Math.floor(total % 3600 / 60);
+  const parts = [];
+  if (days) parts.push(`${days} д`);
+  if (hours) parts.push(`${hours} ч`);
+  if (minutes || !parts.length) parts.push(`${minutes} мин`);
+  return parts.join(" ");
+}
+function formatClock(value) {
+  return new Intl.DateTimeFormat("ru-RU", {hour:"2-digit", minute:"2-digit"}).format(new Date(value));
+}
+function formatDay(value) {
+  return new Intl.DateTimeFormat("ru-RU", {weekday:"short", day:"2-digit", month:"long"}).format(new Date(`${value}T12:00:00`));
+}
+function dataAge(value) {
+  return value ? Math.max(0, Math.round((Date.now() - new Date(value)) / 1000)) : null;
+}
 function bytes(value) {
   if (value == null) return "—";
   const units = ["Б", "КБ", "МБ", "ГБ", "ТБ"]; let i = 0; let n = Number(value);
@@ -60,7 +81,7 @@ function renderSummary(summary) {
   text("#uptime", state.availability?.uptime_percent?.toFixed(2));
   text("#total", summary.total); text("#online", summary.online);
   text("#offline", summary.offline); text("#unknown", summary.unknown);
-  text("#uptime-caption", `за ${state.hours === 24 ? "последние 24 часа" : state.hours === 168 ? "7 дней" : "30 дней"}`);
+  text("#uptime-caption", `за ${state.period === "day" ? "сегодня, с 00:00" : state.period === "week" ? "7 календарных дней" : "30 календарных дней"}`);
   text("#monitor-time", `обновлено ${formatTime(summary.generated_at)}`);
 }
 function visibleServers() {
@@ -95,17 +116,42 @@ function renderTimeline() {
       <div class="timeline-track">${server.segments.map((segment) => {
         const left = (new Date(segment.from).getTime() - start) / (end - start) * 100;
         const width = (new Date(segment.to).getTime() - new Date(segment.from).getTime()) / (end - start) * 100;
-        return `<i class="${segment.status}" style="left:${left}%;width:${Math.max(width, .15)}%" title="${segment.status === "up" ? "Доступен" : segment.status === "down" ? "Недоступен" : "Нет данных"}: ${formatTime(segment.from)} — ${formatTime(segment.to)}"></i>`;
+        const seconds = Math.round((new Date(segment.to) - new Date(segment.from)) / 1000);
+        return `<i class="${segment.status}" style="left:${left}%;width:${Math.max(width, .15)}%" title="${segment.status === "up" ? "Доступен" : segment.status === "down" ? "Недоступен" : "Нет данных"}: ${formatTime(segment.from)} — ${formatTime(segment.to)} (${preciseDuration(seconds)})"></i>`;
       }).join("")}</div>
     </div>`).join("") || `<div class="empty-list visible"><strong>Нет зарегистрированных объектов</strong></div>`;
-  const ticks = state.hours <= 24 ? 6 : state.hours <= 168 ? 7 : 6;
+  const ticks = state.period === "day" ? 6 : state.period === "week" ? 7 : 6;
   $("#timeline-axis").innerHTML = Array.from({length: ticks + 1}, (_, i) => {
     const time = new Date(start + (end - start) * i / ticks);
-    return `<span>${new Intl.DateTimeFormat("ru-RU", state.hours <= 24 ? {hour:"2-digit",minute:"2-digit"} : {day:"2-digit",month:"short"}).format(time)}</span>`;
+    return `<span>${new Intl.DateTimeFormat("ru-RU", state.period === "day" ? {hour:"2-digit",minute:"2-digit"} : {day:"2-digit",month:"short"}).format(time)}</span>`;
   }).join("");
+  renderAvailabilityDetails(servers);
   document.querySelectorAll(".timeline-row").forEach((row) => {
     row.onclick = () => { state.selected = row.dataset.id; switchView("analytics"); loadHeartbeats(state.selected); };
   });
+}
+function renderAvailabilityDetails(servers) {
+  $("#availability-totals").innerHTML = servers.map((server) => `
+    <article>
+      <span>${escapeHtml(server.name)}</span>
+      <dl>
+        <div><dt>Работал</dt><dd class="up-text">${preciseDuration(server.uptime_seconds)}</dd></div>
+        <div><dt>Не отвечал</dt><dd class="down-text">${preciseDuration(server.downtime_seconds)}</dd></div>
+        ${server.unknown_seconds ? `<div><dt>Нет данных</dt><dd>${preciseDuration(server.unknown_seconds)}</dd></div>` : ""}
+      </dl>
+    </article>`).join("");
+  $("#availability-details").innerHTML = servers.map((server) => `
+    <details ${state.period === "day" || state.currentView === "analytics" ? "open" : ""}>
+      <summary><span>Интервалы: ${escapeHtml(server.name)}</span><small>по дням и точному времени</small></summary>
+      <div class="day-list">${(server.days || []).map((day) => `
+        <section class="availability-day">
+          <header><strong>${formatDay(day.date)}</strong><span><b class="up-text">${preciseDuration(day.uptime_seconds)} работал</b><b class="down-text">${preciseDuration(day.downtime_seconds)} не отвечал</b></span></header>
+          <div class="interval-list">${day.intervals.map((interval) => `
+            <div class="${interval.status}"><i></i><span>${interval.status === "up" ? "Отвечал нормально" : interval.status === "down" ? "Не отвечал" : "Нет данных"}</span>
+              <time>${formatClock(interval.from)}–${formatClock(interval.to)}</time><b>${preciseDuration(interval.duration_seconds)}</b>
+            </div>`).join("") || "<small>Интервалов нет</small>"}</div>
+        </section>`).join("")}</div>
+    </details>`).join("");
 }
 function renderIncidents() {
   const incidents = state.servers.filter((server) => server.status === "offline");
@@ -143,11 +189,12 @@ function renderHeartbeatHealth(events) {
   const maxGap = gaps.length ? Math.max(...gaps) : 0;
   const missed = gaps.reduce((total, gap) => total + Math.max(0, Math.floor(gap / expected) - 1), 0);
   const age = Math.max(0, Math.round((Date.now() - new Date(latest.received_at)) / 1000));
+  const stale = age > 600;
   const healthy = age <= expected * 3 && maxGap <= expected * 3;
   $("#heartbeat-health").innerHTML = `<article class="panel pulse-card ${healthy ? "healthy" : "warning"}">
-    <div><p class="eyebrow">НАДЁЖНОСТЬ АГЕНТА</p><h2>${healthy ? "Heartbeat поступает стабильно" : "Есть задержки или пропуски"}</h2></div>
+    <div><p class="eyebrow">НАДЁЖНОСТЬ АГЕНТА</p><h2>${stale ? "Данные устарели — сервер не отвечает" : healthy ? "Heartbeat поступает стабильно" : "Есть задержки или пропуски"}</h2></div>
     <dl>
-      <div><dt>Последний сигнал</dt><dd>${duration(age)} назад</dd></div>
+      <div class="last-response ${stale ? "stale" : "fresh"}"><dt>Последний ответ</dt><dd>${formatTime(latest.received_at)}</dd><small>${duration(age)} назад</small></div>
       <div><dt>Ожидаемый интервал</dt><dd>${duration(expected)}</dd></div>
       <div><dt>Максимальный разрыв</dt><dd>${duration(maxGap)}</dd></div>
       <div><dt>Предполагаемые пропуски</dt><dd>${missed}</dd></div>
@@ -191,7 +238,15 @@ function renderResources(latest = {}) {
     ["Сеть RX / TX", `${bytes(network.rx_bytes)} / ${bytes(network.tx_bytes)}`, "с момента загрузки системы"],
     ["Аптайм ОС", duration(system.uptime_seconds), `${system.kernel || "ядро неизвестно"} · ${system.process_count ?? "—"} процессов`],
   ];
-  $("#resource-cards").innerHTML = cards.map(([label, value, note]) => `<article class="panel resource-card"><p>${label}</p><strong>${value}</strong><small>${note}</small></article>`).join("");
+  const server = availabilityFor(state.selected);
+  const age = dataAge(server?.latest_received_at);
+  const stale = age == null || age > 600;
+  $("#data-freshness").innerHTML = `<article class="freshness-card ${stale ? "stale" : "fresh"}">
+    <div><p>ПОСЛЕДНИЙ ОТВЕТ СЕРВЕРА</p><strong>${formatTime(server?.latest_received_at)}</strong></div>
+    <span>${stale ? `Данные устарели${age == null ? "" : ` на ${preciseDuration(age)}`}. Новая телеметрия не поступает.` : `Данные актуальны · получены ${duration(age)} назад`}</span>
+  </article>`;
+  $("#resource-cards").classList.toggle("stale-data", stale);
+  $("#resource-cards").innerHTML = cards.map(([label, value, note]) => `<article class="panel resource-card"><p>${label}</p><strong>${value}</strong><small>${note}</small>${stale ? '<em>устаревшие данные</em>' : ""}</article>`).join("");
 }
 async function loadHeartbeats(id) {
   if (!id) return;
@@ -242,7 +297,7 @@ async function checkSystem() {
 async function loadDashboard() {
   const [me, summary, servers, availability] = await Promise.all([
     api("/api/v1/auth/me"), api("/api/v1/dashboard/summary"), api("/api/v1/servers"),
-    api(`/api/v1/dashboard/availability?hours=${state.hours}`),
+    api(`/api/v1/dashboard/availability?period=${state.period}&timezone_offset_minutes=${new Date().getTimezoneOffset()}`),
   ]);
   $("#login-screen").classList.add("hidden"); state.currentUser = me; state.servers = servers; state.availability = availability;
   text("#current-user", me.login); text("#settings-user", me.login); text("#settings-role", me.role);
@@ -251,9 +306,9 @@ async function loadDashboard() {
 }
 
 document.querySelectorAll("nav [data-view]").forEach((button) => button.onclick = () => switchView(button.dataset.view));
-document.querySelectorAll(".range-picker [data-hours]").forEach((button) => {
+document.querySelectorAll(".range-picker [data-period]").forEach((button) => {
   button.onclick = async () => {
-    state.hours = Number(button.dataset.hours);
+    state.period = button.dataset.period;
     document.querySelectorAll(".range-picker button").forEach((item) => item.classList.toggle("active", item === button));
     await loadDashboard();
   };
